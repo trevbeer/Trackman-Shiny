@@ -56,6 +56,7 @@ server <- function(input, output, session) {
   output$selected_pitch <- renderText({paste(input$PitchInput)})
   
   output$pitcher_summary_table <- renderDataTable({
+    # also delete anthing after "Both" to make it really work (for now)
     if(input$SplitInput == "Both" & input$PitchInput == "All"){
       table <- game %>%
         filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%# Date == input$GameInput) %>%
