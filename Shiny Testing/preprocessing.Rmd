@@ -37,6 +37,7 @@ total$Pitcher <- gsub("(.*),.*", "\\1", total$Pitcher)
 total$TaggedPitchType <- factor(total$TaggedPitchType, levels = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter"))
 # total$AbbPitchType
 total$Date <- as.Date(total$Date, "%m/%d/%Y")
+total$Counts <- str_c(total$Balls, "-", total$Strikes)
 ```
 
 ```{r, include = FALSE}
@@ -88,69 +89,7 @@ tiltSummary = subset(tiltSummary, select = -secTilt )
 
 ```{r}
 cleaned <- merge(total, tiltSummary, by = c("Pitcher", "TaggedPitchType"), all = TRUE)
-#write.csv(cleaned, "C:\\Users\\tbeer\\Documents\\UCLA\\Baseball Analytics\\Shiny\\Postgame-Report\\cleanedGames.csv", row.names = FALSE)
+# write.csv(cleaned, "C:\\Users\\tbeer\\Documents\\UCLA\\Baseball Analytics\\Shiny\\Shiny Testing\\cleanedGames.csv", row.names = FALSE)
 ```
 
-
-
-```{r, include = FALSE}
-# #overall
-# # creates various columns to indicate (0 or 1) strikes, whiffs, etc
-# strikeData <- scrimSum %>% select('Pitcher','TaggedPitchType','PitchCall')
-# strikeData$PitchNum <- ifelse(strikeData$PitchCall == 'BallCalled', 1, 1)
-# strikeData$StrNum <- ifelse(grepl("^Ball",strikeData$PitchCall), 0, 1)
-# strikeData$SwingNum <- ifelse(strikeData$PitchCall == 'StrikeSwinging', 1, 
-#                       ifelse(strikeData$PitchCall == 'FoulBall', 1, 
-#                         ifelse(strikeData$PitchCall == 'InPlay', 1, 0)
-#                         )
-#                      )
-# strikeData$WhiffNum <- ifelse(strikeData$PitchCall == 'StrikeSwinging', 1, 0)
-# 
-# # count totals for each category
-# scrimStrikeSum <- aggregate(strikeData[,c(5:8)], list(Pitcher = strikeData$Pitcher, Pitch = strikeData$TaggedPitchType), sum, na.rm = TRUE)
-# 
-# # total pitches per guy
-# tot <- aggregate(scrimStrikeSum[,3], list(Pitcher = scrimStrikeSum$Pitcher), sum, na.rm = TRUE)
-# 
-# # add total pitches to dataframe to create usages
-# scrimStrikeSum <- scrimStrikeSum %>% 
-#   left_join(tot, by = "Pitcher")
-# scrimStrikeSum <- scrimStrikeSum %>% add_column(Usage = round(scrimStrikeSum$PitchNum/scrimStrikeSum$x*100, 2), .after = "Pitch")
-# 
-# # converts to percentages
-# scrimStrikeSum$StrP <- (scrimStrikeSum$StrNum/scrimStrikeSum$PitchNum)*100
-# scrimStrikeSum$SwStrP <- (scrimStrikeSum$WhiffNum/scrimStrikeSum$PitchNum)*100
-# scrimStrikeSum$WhiffP <- (scrimStrikeSum$WhiffNum/scrimStrikeSum$SwingNum)*100
-# 
-# # remove unneeded counts
-# scrimStrikeSum <- scrimStrikeSum[,c(1:4,9:11)]
-```
-
-```{r, include = FALSE}
-# # ball in play data
-# inplayData <- scrimData %>% select('Pitcher','TaggedPitchType','PitchCall','ExitSpeed', 'Angle')
-# inplayData <- na.omit(inplayData)
-# inplayData <- inplayData[inplayData$PitchCall == 'InPlay',]
-# inplayData$BIP <- ifelse(inplayData$PitchCall == 'InPlay', 1, 0)
-# 
-# # average exit velocity and launch angle from balls put in play
-# evSum <- aggregate(inplayData[,c(5:6)], list(Pitcher = inplayData$Pitcher, Pitch = inplayData$TaggedPitchType), mean, na.rm = TRUE)
-# colnames(evSum)[3] <- "EV"
-# colnames(evSum)[4] <- "LaunchAngle"
-# 
-# # number of balls put into play
-# bip <- aggregate(inplayData[,7], list(Pitcher = inplayData$Pitcher, Pitch = inplayData$TaggedPitchType), sum, na.rm = TRUE)
-# evSum$BIP <- bip$BIP
-# 
-# # merges strike/swing data with EV
-# evSum <- merge(evSum, scrimStrikeSum, all = TRUE)
-# 
-# # round values
-# evSum <- evSum %>% mutate_if(is.numeric, ~round(., 2))
-# evSum <- evSum %>% mutate_at(c('Usage', 'StrP', 'SwStrP', 'WhiffP'), as.integer)
-# 
-# # paste percent sign for visuals
-# evSum <- evSum %>% mutate_at(c('Usage', 'StrP', 'SwStrP', 'WhiffP'), as.character)
-# evSum[,c(6,8:10)] <- lapply(evSum[,c(6,8:10)], paste0, '%')
-```
 
