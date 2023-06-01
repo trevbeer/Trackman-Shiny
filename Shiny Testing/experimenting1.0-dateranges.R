@@ -22,26 +22,27 @@ ui <- fluidPage(
            column(2, selectInput(inputId = "PitcherInput", label = "Select Pitcher", choices = sort(unique(game$Pitcher)))),
            column(2, dateRangeInput(inputId = "DateRangeInput", label = "Select Date Range", start = min(game$Date), end = max(game$Date))),
            column(2, selectInput(inputId = "SplitInput", label = "Select Batter Hand", choices = c("Both", sort(unique(game$BatterSide))))),
-           column(2, selectInput(inputId = "PitchInput", label = "Select Pitch", choices = c("All", sort(levels(unique(game$TaggedPitchType))))))
+           column(2, selectInput(inputId = "PitchInput", label = "Select Pitch", choices = c("All", sort(levels(unique(game$TaggedPitchType)))))),
+           column(2, selectInput(inputId = "ReportInput", label = "Select Report Type", choices = c("Pitch Metrics", "Batted Ball")))
          ),
          hr(style="border-color: black;"),
-         wellPanel(style = "background: white; border-color:black; border-width:2px",
-                   fluidRow(
-                     column(2, img(src = "bruinlogo.png", height = 150, width = 150), align = "center"), 
-                     column(4, h2(strong(textOutput("selected_pitcher"))), hr(style="border-color: black;"), style = "padding-right:0px;"),
-                     column(6, h2("Post-Game Report"), hr(style="border-color: black;"), h2(textOutput("selected_game")), align = "right", style = "padding-left:0px;")),
-                   hr(style="border-color: black;"), 
-                   fluidRow(
-                     column(10, offset = 1, h3(strong("Pitcher Summary Table")), dataTableOutput("pitcher_summary_table"), align = "center")
-                   ), br(), br(), 
-                   fluidRow(
-                     column(4, plotOutput("pitch_movement_plot"), align = "center"),
-                     column(4, plotOutput("pitch_location_plot"), align = "center"),
-                     column(4, plotOutput("pitch_velocity_plot"), align = "center")
-                   ), br(), br(), br()
-         ), br(),
-         p(em("If the contents of this page appear distorted, please decrease your web browser zoom to 80% or 90%."), align = "center")
-  )
+          wellPanel(style = "background: white; border-color:black; border-width:2px",
+                    fluidRow(
+                      column(2, img(src = "bruinlogo.png", height = 150, width = 150), align = "center"),
+                      column(4, h2(strong(textOutput("selected_pitcher"))), hr(style="border-color: black;"), style = "padding-right:0px;"),
+                      column(6, h2("Post-Game Report"), hr(style="border-color: black;"), h2(textOutput("selected_game")), align = "right", style = "padding-left:0px;")),
+                    hr(style="border-color: black;"),
+                    fluidRow(
+                      column(10, offset = 1, h3(strong("Pitcher Summary Table")), dataTableOutput("pitcher_summary_table"), align = "center")
+                    ), br(), br(),
+                    fluidRow(
+                      column(4, plotOutput("pitch_movement_plot"), align = "center"),
+                      column(4, plotOutput("pitch_location_plot"), align = "center"),
+                      column(4, plotOutput("pitch_velocity_plot"), align = "center")
+                    ), br(), br(), br()
+          ), br(),
+          p(em("If the contents of this page appear distorted, please decrease your web browser zoom to 80% or 90%."), align = "center")
+ )
 )
 
 
@@ -59,7 +60,15 @@ server <- function(input, output, session) {
   
   output$selected_pitch <- renderText({paste(input$PitchInput)})
   
+  output$selected_report <- renderText({paste(input$ReportInput)})
+  
   output$pitcher_summary_table <- renderDataTable({
+    # if(input$ReportInput == "Pitcher Metrics"){
+    #   
+    # }
+    # else{
+    #   
+    # }
     if(input$SplitInput == "Both" & input$PitchInput == "All"){
       table <- game %>%
         filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%
@@ -77,8 +86,11 @@ server <- function(input, output, session) {
                   'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                   'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                   'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                  'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
                   'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+        ungroup() %>%
+        mutate('Usage %' = round(prop.table(No.), 3)*100)
     }
     else if (input$SplitInput == "Both" & input$PitchInput != "All") {
       table <- game %>%
@@ -97,8 +109,11 @@ server <- function(input, output, session) {
                   'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                   'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                   'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                  'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
                   'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+        ungroup() %>%
+        mutate('Usage %' = round(prop.table(No.), 3)*100)
     }
     else if (input$SplitInput != "Both" & input$PitchInput == "All") {
       table <- game %>%
@@ -117,8 +132,11 @@ server <- function(input, output, session) {
                   'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                   'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                   'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                  'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
                   'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+        ungroup() %>%
+        mutate('Usage %' = round(prop.table(No.), 3)*100)
     }
     else {
       table <- game %>%
@@ -137,12 +155,15 @@ server <- function(input, output, session) {
                   'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                   'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                   'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                  'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
                   'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+        ungroup() %>%
+        mutate('Usage %' = round(prop.table(No.), 3)*100)
     }
     tableFilter <- reactive({table})
     datatable(tableFilter(), options = list(dom = 't', columnDefs = list(list(targets = 0, visible = FALSE)))) %>%
-      formatStyle(c(1,2), `border-left` = "solid 1px") %>% formatStyle(c(2,13,15), `border-right` = "solid 1px")
+      formatStyle(c(1,2), `border-left` = "solid 1px") %>% formatStyle(c(2,13,17), `border-right` = "solid 1px")
   })
   
   
@@ -225,7 +246,7 @@ server <- function(input, output, session) {
       geom_segment(aes(x = -0.708, y = 0.3, xend = 0, yend = 0.5), size = 1, color = "black") + 
       geom_segment(aes(x = 0, y = 0.5, xend = 0.708, yend = 0.3), size = 1, color = "black") + 
       geom_segment(aes(x = 0.708, y = 0.3, xend = 0.708, yend = 0.15), size = 1, color = "black") +
-      geom_point(size = 3, na.rm = TRUE, , alpha = 0.7) +
+      geom_point(size = 3, na.rm = TRUE, alpha = 0.7) +
       theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5)) +
       theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_blank())
   }, width = 350, height = 450)
