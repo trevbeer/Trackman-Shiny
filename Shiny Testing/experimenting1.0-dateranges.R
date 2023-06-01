@@ -2,6 +2,7 @@ library(shiny)
 library(readr)
 library(tidyverse)
 library(DT)
+library(sportyR)
 
 # trevor csv read
 game <- read.csv("cleanedGames.csv")
@@ -516,84 +517,145 @@ server <- function(input, output, session) {
   
   
   output$pitch_velocity_plot <- renderPlot({
-    # if(input$ReportInput == "Pitch Metrics"){
-    #   
-    # }
-    # else{
-    #   
-    # }
-    if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput == "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%
-          group_by(TaggedPitchType) %>%
-          dplyr::mutate(PitchNum = row_number())
-      })
-    }
-    else if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput != "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts == input$CountInput) %>%
-          group_by(TaggedPitchType) %>%
-          dplyr::mutate(PitchNum = row_number())
-      })
-    }
-    else if(input$SplitInput != "Both" & input$PitchInput == "All" & input$CountInput == "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput) %>%
-          group_by(TaggedPitchType) %>%
-          dplyr::mutate(PitchNum = row_number())
-      })
-    }
-    else if(input$SplitInput != "Both" & input$PitchInput == "All" & input$CountInput != "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, Counts == input$CountInput) %>%
-          group_by(TaggedPitchType) %>%
-          dplyr::mutate(PitchNum = row_number())
-      })
-    }
-    else if(input$SplitInput == "Both" & input$PitchInput != "All" & input$CountInput == "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput) %>%
-          group_by(TaggedPitchType) %>%
-          dplyr::mutate(PitchNum = row_number())
-      })
-    }
-    else if(input$SplitInput == "Both" & input$PitchInput != "All" & input$CountInput != "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput, Counts == input$CountInput) %>%
-          group_by(TaggedPitchType) %>%
-          dplyr::mutate(PitchNum = row_number())
-      })
-    }
-    else if(input$SplitInput != "Both" & input$PitchInput != "All" & input$CountInput == "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput, BatterSide == input$SplitInput) %>%
-          group_by(TaggedPitchType) %>%
-          dplyr::mutate(PitchNum = row_number())
-      })
+    if(input$ReportInput == "Pitch Metrics"){
+      if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%
+            group_by(TaggedPitchType) %>%
+            dplyr::mutate(PitchNum = row_number())
+        })
+      }
+      else if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput != "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts == input$CountInput) %>%
+            group_by(TaggedPitchType) %>%
+            dplyr::mutate(PitchNum = row_number())
+        })
+      }
+      else if(input$SplitInput != "Both" & input$PitchInput == "All" & input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput) %>%
+            group_by(TaggedPitchType) %>%
+            dplyr::mutate(PitchNum = row_number())
+        })
+      }
+      else if(input$SplitInput != "Both" & input$PitchInput == "All" & input$CountInput != "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, Counts == input$CountInput) %>%
+            group_by(TaggedPitchType) %>%
+            dplyr::mutate(PitchNum = row_number())
+        })
+      }
+      else if(input$SplitInput == "Both" & input$PitchInput != "All" & input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput) %>%
+            group_by(TaggedPitchType) %>%
+            dplyr::mutate(PitchNum = row_number())
+        })
+      }
+      else if(input$SplitInput == "Both" & input$PitchInput != "All" & input$CountInput != "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput, Counts == input$CountInput) %>%
+            group_by(TaggedPitchType) %>%
+            dplyr::mutate(PitchNum = row_number())
+        })
+      }
+      else if(input$SplitInput != "Both" & input$PitchInput != "All" & input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput, BatterSide == input$SplitInput) %>%
+            group_by(TaggedPitchType) %>%
+            dplyr::mutate(PitchNum = row_number())
+        })
+      }
+      else{
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType == input$PitchInput, Counts == input$CountInput) %>%
+            group_by(TaggedPitchType) %>%
+            dplyr::mutate(PitchNum = row_number())
+        })
+      }
+      ggplot(data = dataFilter()) + 
+        geom_line(aes(y = RelSpeed, x = PitchNum, color = TaggedPitchType), linewidth = 1.5) + 
+        scale_color_manual(values = pitch_colors) +
+        labs(x = "Pitch Count", y = "Pitch Velocity (MPH)", color = " ", title = "Pitch Velocity") + 
+        theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), axis.text = element_text(size = 12)) +
+        theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
     }
     else{
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType == input$PitchInput, Counts == input$CountInput) %>%
-          group_by(TaggedPitchType) %>%
-          dplyr::mutate(PitchNum = row_number())
-      })
+      if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50) %>% 
+            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
+        })
+      }
+      else if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput != "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, Counts == input$CountInput) %>% 
+            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
+        })
+      }
+      else if(input$SplitInput != "Both" & input$PitchInput == "All" & input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, BatterSide == input$SplitInput) %>% 
+            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
+        })
+      }
+      else if(input$SplitInput != "Both" & input$PitchInput == "All" & input$CountInput != "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, BatterSide == input$SplitInput, Counts == input$CountInput) %>% 
+            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
+        })
+      }
+      else if(input$SplitInput == "Both" & input$PitchInput != "All" & input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, TaggedPitchType == input$PitchInput) %>% 
+            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
+        })
+      }
+      else if(input$SplitInput == "Both" & input$PitchInput != "All" & input$CountInput != "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, TaggedPitchType == input$PitchInput, Counts == input$CountInput) %>% 
+            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
+        })
+      }
+      else if(input$SplitInput != "Both" & input$PitchInput != "All" & input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, BatterSide == input$SplitInput, TaggedPitchType == input$PitchInput) %>% 
+            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
+        })
+      }
+      else{
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, BatterSide == input$SplitInput, TaggedPitchType == input$PitchInput, Counts == input$CountInput) %>% 
+            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
+        })
+      }
+      geom_baseball(league = "MLB") +
+        geom_point(data = dataFilter(), aes(round(Distance * sin(Bearing * pi / 180), 3), round(Distance * cos(Bearing * pi / 180), 3),
+                       color = ExitSpeed)) +
+        scale_color_gradient(low = 'gold', high = 'blue') # +
+        # labs(x = "Pitch Count", y = "Pitch Velocity (MPH)", color = " ", title = "Pitch Velocity") + 
+        # theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), axis.text = element_text(size = 12)) +
+        # theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
     }
-    ggplot(data = dataFilter()) + 
-      geom_line(aes(y = RelSpeed, x = PitchNum, color = TaggedPitchType), linewidth = 1.5) + 
-      scale_color_manual(values = pitch_colors) +
-      labs(x = "Pitch Count", y = "Pitch Velocity (MPH)", color = " ", title = "Pitch Velocity") + 
-      theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), axis.text = element_text(size = 12)) +
-      theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
+
   }, width = 450, height = 450)
-  
   
 }
 
