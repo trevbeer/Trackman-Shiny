@@ -5,7 +5,8 @@ library(ggplot2)
 
 game <- read.csv("cleanedGames.csv")
 game$Date <- as.Date(game$Date)
-# this line needs work
+game$TaggedPitchType <- factor(game$TaggedPitchType, levels = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter"))
+# this line maybe needs work/analogous column created
 # game$pitch_type <- factor(game$pitch_type, levels = c("FF", "SI", "FC", "CS", "CU", "KC", "SL", "CH", "FS"))
 
 ui <- fluidPage(
