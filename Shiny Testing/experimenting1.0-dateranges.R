@@ -1,13 +1,18 @@
 library(shiny)
-library(dplyr)
+library(readr)
+library(tidyverse)
 library(DT)
-library(ggplot2)
 
+# trevor csv read
 game <- read.csv("cleanedGames.csv")
+# taiyo csv read
+game <- read_csv('~/Downloads/cleanedGames.csv')
 game$Date <- as.Date(game$Date)
 game$TaggedPitchType <- factor(game$TaggedPitchType, levels = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter"))
 # this line needs work
 # game$pitch_type <- factor(game$pitch_type, levels = c("FF", "SI", "FC", "CS", "CU", "KC", "SL", "CH", "FS"))
+pitch_colors <- c('Fastball' = '#d22d49', 'Sinker' = '#fe9d00', 'Cutter' = '#933f2c', 'Curveball' = '#00d1ed',
+                  'Slider' = '#c3bd0d', 'Sweeper' = '#CB9AF0', 'ChangeUp' = '#23be41', 'Splitter' = '#3bacac', 'Other' = '#Acafaf')
 
 ui <- fluidPage(
   column(10, offset = 1,
@@ -61,83 +66,83 @@ server <- function(input, output, session) {
       table <- game %>%
         filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%# Date == input$GameInput) %>%
         group_by('Pitch' = TaggedPitchType) %>%
-        dplyr::summarize('No.' = n(),
-                         'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                         'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                         'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
-                         'Tilt' = AveTilt[1],
-                         'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                         'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                         'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                         'VB' = round(mean(InducedVertBreak, na.rm = TRUE), 2),
-                         'HB' = round(mean(HorzBreak, na.rm = TRUE), 2),
-                         'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                         'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                         'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                         'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                             sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+        summarize('No.' = n(),
+                  'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
+                  'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
+                  'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
+                  'Tilt' = AveTilt[1],
+                  'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
+                  'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
+                  'Extension' = round(mean(Extension, na.rm = TRUE), 2),
+                  'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 2),
+                  'HB' = round(mean(HorzBreak, na.rm = TRUE), 2),
+                  'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
+                  'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
+                  'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                  'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
+                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
     }
     # delete this if you want it to work (without pitch filtering... it acts up bc of the whole factor/levels thing
-    else if(input$SplitInput == "Both" & input$PitchInput != "All"){
+    else if (input$SplitInput == "Both" & input$PitchInput != "All") {
       table <- game %>%
         filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType = input$PitchInput) %>%# Date == input$GameInput) %>%
         group_by('Pitch' = TaggedPitchType) %>%
-        dplyr::summarize('No.' = n(),
-                         'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                         'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                         'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
-                         'Tilt' = AveTilt[1],
-                         'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                         'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                         'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                         'VB' = round(mean(InducedVertBreak, na.rm = TRUE), 2),
-                         'HB' = round(mean(HorzBreak, na.rm = TRUE), 2),
-                         'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                         'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                         'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                         'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                             sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+        summarize('No.' = n(),
+                  'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
+                  'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
+                  'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                  'Tilt' = AveTilt[1],
+                  'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
+                  'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
+                  'Extension' = round(mean(Extension, na.rm = TRUE), 2),
+                  'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 2),
+                  'HB' = round(mean(HorzBreak, na.rm = TRUE), 2),
+                  'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
+                  'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
+                  'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                  'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
+                                    sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
     }
       # delete this if you want it to work
-    else if(input$SplitInput != "Both" & input$PitchInput == "All"){
+    else if (input$SplitInput != "Both" & input$PitchInput == "All") {
       table <- game %>%
         filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide = input$SplitInput) %>%# Date == input$GameInput) %>%
         group_by('Pitch' = TaggedPitchType) %>%
-        dplyr::summarize('No.' = n(),
-                         'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                         'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                         'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
-                         'Tilt' = AveTilt[1],
-                         'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                         'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                         'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                         'VB' = round(mean(InducedVertBreak, na.rm = TRUE), 2),
-                         'HB' = round(mean(HorzBreak, na.rm = TRUE), 2),
-                         'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                         'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                         'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                         'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                             sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+        summarize('No.' = n(),
+                  'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
+                  'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
+                  'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                  'Tilt' = AveTilt[1],
+                  'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
+                  'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
+                  'Extension' = round(mean(Extension, na.rm = TRUE), 2),
+                  'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 2),
+                  'HB' = round(mean(HorzBreak, na.rm = TRUE), 2),
+                  'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
+                  'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
+                  'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                  'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
+                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
     }
-    else{
+    else {
       table <- game %>%
         filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType = input$PitchInput) %>%# Date == input$GameInput) %>%
         group_by('Pitch' = TaggedPitchType) %>%
-        dplyr::summarize('No.' = n(),
-                         'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                         'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                         'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
-                         'Tilt' = AveTilt[1],
-                         'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                         'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                         'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                         'VB' = round(mean(InducedVertBreak, na.rm = TRUE), 2),
-                         'HB' = round(mean(HorzBreak, na.rm = TRUE), 2),
-                         'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                         'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                         'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                         'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                             sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+        summarize('No.' = n(),
+                  'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
+                  'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
+                  'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                  'Tilt' = AveTilt[1],
+                  'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
+                  'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
+                  'Extension' = round(mean(Extension, na.rm = TRUE), 2),
+                  'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 2),
+                  'HB' = round(mean(HorzBreak, na.rm = TRUE), 2),
+                  'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
+                  'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
+                  'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                  'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
+                                      sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
     }
     tableFilter <- reactive({table})
     datatable(tableFilter(), options = list(dom = 't', columnDefs = list(list(targets = 0, visible = FALSE)))) %>%
@@ -158,12 +163,21 @@ server <- function(input, output, session) {
           filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput)# %>%#Date == input$GameInput)
       })
     }
+    
+    means <- dataFilter() %>% 
+      group_by(TaggedPitchType) %>% 
+      summarize(InducedVertBreak = mean(InducedVertBreak, na.rm = T),
+                HorzBreak = mean(HorzBreak, na.rm = T)) %>% 
+      select(TaggedPitchType, InducedVertBreak, HorzBreak)
+    
     ggplot(data = dataFilter(), aes(x = HorzBreak, y = InducedVertBreak, color = TaggedPitchType)) +
+      scale_color_manual(values = pitch_colors) +
       labs(x = "Horizontal Movement (in.)", y = "Vertical Movement (in.)", color = " ", title = "Pitch Movement") + 
       xlim(-25, 25) + ylim(-25, 25) +
       geom_segment(aes(x = 0, y = -25, xend = 0, yend = 25), size = 1, color = "grey55") + 
       geom_segment(aes(x = -25, y = 0, xend = 25, yend = 0), size = 1, color = "grey55") +
-      geom_point(size = 2, na.rm = TRUE) +
+      geom_point(size = 3, na.rm = TRUE, alpha = 0.7, size = 2) +
+      geom_point(data = means, shape = 21, size = 4, fill = 'white', color = 'black', stroke = 1.5) +
       theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5)) +
       theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
   }, width = 450, height = 450)
@@ -184,13 +198,14 @@ server <- function(input, output, session) {
     }
     ggplot(data = dataFilter(), aes(x = PlateLocSide, y = PlateLocHeight, color = TaggedPitchType)) +
       xlim(-3,3) + ylim(0,5) + labs(color = "", title = "Pitch Location") +
+      scale_color_manual(values = pitch_colors) +
       geom_rect(aes(xmin = -0.83, xmax = 0.83, ymin = 1.5, ymax = 3.5), alpha = 0, size = 1, color = "black") +
       geom_segment(aes(x = -0.708, y = 0.15, xend = 0.708, yend = 0.15), size = 1, color = "black") + 
       geom_segment(aes(x = -0.708, y = 0.3, xend = -0.708, yend = 0.15), size = 1, color = "black") + 
       geom_segment(aes(x = -0.708, y = 0.3, xend = 0, yend = 0.5), size = 1, color = "black") + 
       geom_segment(aes(x = 0, y = 0.5, xend = 0.708, yend = 0.3), size = 1, color = "black") + 
       geom_segment(aes(x = 0.708, y = 0.3, xend = 0.708, yend = 0.15), size = 1, color = "black") +
-      geom_point(size = 3, na.rm = TRUE) +
+      geom_point(size = 3, na.rm = TRUE, , alpha = 0.7) +
       theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5)) +
       theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_blank())
   }, width = 350, height = 450)
@@ -215,6 +230,7 @@ server <- function(input, output, session) {
     }
     ggplot(data = dataFilter()) + 
       geom_line(aes(y = RelSpeed, x = PitchNum, color = TaggedPitchType), size = 2) + 
+      scale_color_manual(values = pitch_colors) +
       labs(x = "Pitch Count", y = "Pitch Velocity (MPH)", color = " ", title = "Pitch Velocity") + 
       theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), axis.text = element_text(size = 12)) +
       theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
