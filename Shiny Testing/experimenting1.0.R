@@ -326,77 +326,91 @@ server <- function(input, output, session) {
   
   
   output$pitch_movement_plot <- renderPlot({
-    # if(input$ReportInput == "Pitch Metrics"){
-    #   
-    # }
-    # else{
-    #   
-    # }
-    if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput == "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]))
-      })
-    }
-    else if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput != "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts == input$CountInput)
-      })
-    }
-    else if(input$SplitInput != "Both" & input$PitchInput == "All"& input$CountInput == "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput)
-      })
-    }
-    else if(input$SplitInput != "Both" & input$PitchInput == "All"& input$CountInput != "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, Counts == input$CountInput)
-      })
-    }
-    else if(input$SplitInput == "Both" & input$PitchInput != "All"& input$CountInput == "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput)
-      })
-    }
-    else if(input$SplitInput == "Both" & input$PitchInput != "All"& input$CountInput != "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput, Counts == input$CountInput)
-      })
-    }
-    else if(input$SplitInput != "Both" & input$PitchInput != "All"& input$CountInput == "All"){
-      dataFilter <- reactive({
-        game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput, BatterSide == input$SplitInput)
-      })
+    if(input$ReportInput == "Pitch Metrics"){
+      if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]))
+        })
+      }
+      else if(input$SplitInput == "Both" & input$PitchInput == "All" & input$CountInput != "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts == input$CountInput)
+        })
+      }
+      else if(input$SplitInput != "Both" & input$PitchInput == "All"& input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput)
+        })
+      }
+      else if(input$SplitInput != "Both" & input$PitchInput == "All"& input$CountInput != "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, Counts == input$CountInput)
+        })
+      }
+      else if(input$SplitInput == "Both" & input$PitchInput != "All"& input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput)
+        })
+      }
+      else if(input$SplitInput == "Both" & input$PitchInput != "All"& input$CountInput != "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput, Counts == input$CountInput)
+        })
+      }
+      else if(input$SplitInput != "Both" & input$PitchInput != "All"& input$CountInput == "All"){
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType == input$PitchInput, BatterSide == input$SplitInput)
+        })
+      }
+      else{
+        dataFilter <- reactive({
+          game %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType == input$PitchInput, Counts == input$CountInput)
+        })
+      }
+      
+      means <- dataFilter() %>% 
+        group_by(TaggedPitchType) %>% 
+        dplyr::summarize(InducedVertBreak = mean(InducedVertBreak, na.rm = T),
+                         HorzBreak = mean(HorzBreak, na.rm = T)) %>% 
+        select(TaggedPitchType, InducedVertBreak, HorzBreak)
+      
+      ggplot(data = dataFilter(), aes(x = HorzBreak, y = InducedVertBreak, color = TaggedPitchType)) +
+        scale_color_manual(values = pitch_colors) +
+        labs(x = "Horizontal Movement (in.)", y = "Vertical Movement (in.)", color = " ", title = "Pitch Movement") + 
+        xlim(-25, 25) + ylim(-25, 25) +
+        geom_segment(aes(x = 0, y = -25, xend = 0, yend = 25), linewidth = 1, color = "grey55") + 
+        geom_segment(aes(x = -25, y = 0, xend = 25, yend = 0), linewidth = 1, color = "grey55") +
+        geom_point(size = 3, na.rm = TRUE, alpha = 0.7, size = 2) +
+        geom_point(data = means, shape = 21, size = 4, fill = 'white', color = 'black', stroke = 1.5) +
+        theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5)) +
+        theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
     }
     else{
       dataFilter <- reactive({
         game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType == input$PitchInput, Counts == input$CountInput)
+          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%
+          group_by(TaggedPitchType, Date) %>%
+          dplyr::summarize('No.' = n()) %>%
+          ungroup() %>%
+          group_by(Date) %>%
+          mutate('Usage' = round(prop.table(No.), 3)*100)
       })
+      ggplot(data = dataFilter()) +
+        geom_point(aes(x = Date, y = Usage, color = TaggedPitchType)) +
+        geom_line(aes(x = Date, y = Usage, color = TaggedPitchType)) +
+        scale_color_manual(values = pitch_colors) +
+        labs(x = "Date", y = "Usage %", color = " ", title = "Usage % By Outing") +
+        theme_bw()# +
     }
-    
-    means <- dataFilter() %>% 
-      group_by(TaggedPitchType) %>% 
-      dplyr::summarize(InducedVertBreak = mean(InducedVertBreak, na.rm = T),
-                HorzBreak = mean(HorzBreak, na.rm = T)) %>% 
-      select(TaggedPitchType, InducedVertBreak, HorzBreak)
-    
-    ggplot(data = dataFilter(), aes(x = HorzBreak, y = InducedVertBreak, color = TaggedPitchType)) +
-      scale_color_manual(values = pitch_colors) +
-      labs(x = "Horizontal Movement (in.)", y = "Vertical Movement (in.)", color = " ", title = "Pitch Movement") + 
-      xlim(-25, 25) + ylim(-25, 25) +
-      geom_segment(aes(x = 0, y = -25, xend = 0, yend = 25), linewidth = 1, color = "grey55") + 
-      geom_segment(aes(x = -25, y = 0, xend = 25, yend = 0), linewidth = 1, color = "grey55") +
-      geom_point(size = 3, na.rm = TRUE, alpha = 0.7, size = 2) +
-      geom_point(data = means, shape = 21, size = 4, fill = 'white', color = 'black', stroke = 1.5) +
-      theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5)) +
-      theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
+
   }, width = 450, height = 450)
   
   
@@ -649,9 +663,9 @@ server <- function(input, output, session) {
       geom_baseball(league = "MLB") +
         geom_point(data = dataFilter(), aes(round(Distance * sin(Bearing * pi / 180), 3), round(Distance * cos(Bearing * pi / 180), 3),
                        color = ExitSpeed)) +
-        scale_color_gradient(low = 'gold', high = 'blue') # +
-        # labs(x = "Pitch Count", y = "Pitch Velocity (MPH)", color = " ", title = "Pitch Velocity") + 
-        # theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), axis.text = element_text(size = 12)) +
+        scale_color_gradient(low = 'gold', high = 'blue') +
+        labs(title = "Spray Chart") + 
+        theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), axis.text = element_text(size = 12))# +
         # theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
     }
 
