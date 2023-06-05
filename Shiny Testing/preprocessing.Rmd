@@ -26,21 +26,23 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 ```{r, include = FALSE}
 # enter csv name
 total <- read.csv(file = "allGames.csv")
-# removing BS tags, pitchouts etc
+# removing unnecessary tags, pitchouts etc
 total <- total %>% subset(TaggedPitchType != "Other")
 total <- total %>% subset(TaggedPitchType != "Knuckleball")
-# just ucla guys, not really necessary line
+# change this line to your team of interest, or remove if no filtering on team
 total <- total %>% subset(PitcherTeam == "UCLA")
 # remove first names and commas
 total$Pitcher <- gsub("(.*),.*", "\\1", total$Pitcher)
-# order pitches so you dont have to later
 total$TaggedPitchType <- factor(total$TaggedPitchType, levels = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter"))
 # total$AbbPitchType
+# create date objects
 total$Date <- as.Date(total$Date, "%m/%d/%Y")
+# create counts
 total$Counts <- str_c(total$Balls, "-", total$Strikes)
 ```
 
 ```{r, include = FALSE}
+# want to find a way to average the Tilt (as HH:MM is harder to manipulate)
 scrimData <- total %>% group_by("Pitcher") %>% group_by("TaggedPitchType")
 # Overall
 # Function to convert a time in HH:MM:SS format to a numeric value representing the number of seconds
@@ -88,8 +90,10 @@ tiltSummary = subset(tiltSummary, select = -secTilt )
 ```
 
 ```{r}
+# cleaned csv
 cleaned <- merge(total, tiltSummary, by = c("Pitcher", "TaggedPitchType"), all = TRUE)
-# write.csv(cleaned, "C:\\Users\\tbeer\\Documents\\UCLA\\Baseball Analytics\\Shiny\\Shiny Testing\\cleanedGames.csv", row.names = FALSE)
+# change to your path
+write.csv(cleaned, "C:\\Users\\tbeer\\Documents\\UCLA\\Baseball Analytics\\Shiny\\Shiny Testing\\cleanedGames.csv", row.names = FALSE)
 ```
 
 
