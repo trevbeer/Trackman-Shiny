@@ -87,7 +87,14 @@ tiltSummary <- aggregate(tiltData[, 6], list(Pitcher = tiltData$Pitcher, TaggedP
 # Convert the average back to a time in HH:MM:SS format
 seconds <- tiltSummary$secTilt
 tiltSummary$AveTilt <- convert_to_time(seconds)
-tiltSummary = subset(tiltSummary, select = -secTilt )
+# remove seconds
+tiltSummary = subset(tiltSummary, select = -secTilt)
+# turn into time to round
+tiltRound <- strptime(tiltSummary$AveTilt, "%H:%M")
+# round
+tiltRound <- lubridate::round_date(tiltRound, "15 minutes")
+# remove seconds/ unecessary stuff and add to tiltSummary
+tiltSummary$AveTilt <- as.character(format(tiltRound,"%H:%M"))
 ```
 
 ```{r}
