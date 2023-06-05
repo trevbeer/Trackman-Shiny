@@ -39,6 +39,7 @@ total$TaggedPitchType <- factor(total$TaggedPitchType, levels = c("Fastball", "S
 total$Date <- as.Date(total$Date, "%m/%d/%Y")
 # create counts
 total$Counts <- str_c(total$Balls, "-", total$Strikes)
+total$HardHit <- ifelse(total$ExitSpeed >= 95, 1, 0)
 ```
 
 ```{r, include = FALSE}
