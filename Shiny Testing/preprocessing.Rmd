@@ -38,8 +38,16 @@ total$TaggedPitchType <- factor(total$TaggedPitchType, levels = c("Fastball", "S
 # create date objects
 total$Date <- as.Date(total$Date, "%m/%d/%Y")
 # create counts
+total$Date <- as.Date(total$Date, "%m/%d/%Y")
 total$Counts <- str_c(total$Balls, "-", total$Strikes)
 total$HardHit <- ifelse(total$ExitSpeed >= 95, 1, 0)
+total$PlayResult <- ifelse(total$KorBB == "Walk", "Walk", total$PlayResult)
+total$PlayResult <- ifelse(total$KorBB == "Strikeout", "Strikeout", total$PlayResult)
+total$PlayResult <- ifelse(total$PitchCall == "HitByPitch", "HitByPitch", total$PlayResult)
+total$ExitSpeed <- ifelse(total$PitchCall == "HitByPitch", NA, total$ExitSpeed)
+total$Angle <- ifelse(total$PitchCall == "HitByPitch", NA, total$Angle)
+# taiyo add barrels
+
 ```
 
 ```{r, include = FALSE}
