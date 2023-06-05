@@ -35,9 +35,6 @@ total <- total %>% subset(PitcherTeam == "UCLA")
 total$Pitcher <- gsub("(.*),.*", "\\1", total$Pitcher)
 total$TaggedPitchType <- factor(total$TaggedPitchType, levels = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter"))
 # total$AbbPitchType
-# create date objects
-total$Date <- as.Date(total$Date, "%m/%d/%Y")
-# create counts
 total$Date <- as.Date(total$Date, "%m/%d/%Y")
 total$Counts <- str_c(total$Balls, "-", total$Strikes)
 total$HardHit <- ifelse(total$ExitSpeed >= 95, 1, 0)
@@ -64,6 +61,8 @@ convert_to_seconds <- function(hand, time) {
   # without this, average of 12:30 and 1:00 spits junk value around 6:00,
   # instead of 12:45
   hours <- ifelse(hand == "Right" & hours == 12, 0, hours)
+  hours <- ifelse(hand == "Right" & hours == 11, -1, hours)
+  hours <- ifelse(hand == "Left" & hours == 1, 13, hours)
   return(hours * 3600 + minutes * 60 + seconds)
 }
 
