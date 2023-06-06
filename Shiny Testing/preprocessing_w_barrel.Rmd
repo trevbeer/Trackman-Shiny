@@ -40,7 +40,6 @@ total$TaggedPitchType <- factor(total$TaggedPitchType, levels = c("Fastball", "S
 # create date objects
 total$Date <- as.Date(total$Date, "%m/%d/%Y")
 # create counts
-total$Date <- as.Date(total$Date, "%m/%d/%Y") # this is just duplicate yeah? delete?
 total$Counts <- str_c(total$Balls, "-", total$Strikes)
 total$HardHit <- ifelse(total$ExitSpeed >= 95, 1, 0)
 total$PlayResult <- ifelse(total$KorBB == "Walk", "Walk", total$PlayResult)
