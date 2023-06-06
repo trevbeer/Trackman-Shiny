@@ -4,16 +4,48 @@ library(tidyverse)
 library(DT)
 library(sportyR)
 
-# trevor csv read
+# csv read
 game <- read.csv("cleanedGames.csv")
-# taiyo csv read
-# game <- read_csv('~/Downloads/cleanedGames.csv')
+game <- game %>% filter(PitcherTeam == 'UCLA')
 game$Date <- as.Date(game$Date)
 game$TaggedPitchType <- factor(game$TaggedPitchType, levels = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter"))
 # this line needs work
 # game$pitch_type <- factor(game$pitch_type, levels = c("FF", "SI", "FC", "CS", "CU", "KC", "SL", "CH", "FS"))
 pitch_colors <- c('Fastball' = '#d22d49', 'Sinker' = '#fe9d00', 'Cutter' = '#933f2c', 'Curveball' = '#00d1ed',
                   'Slider' = '#c3bd0d', 'Sweeper' = '#CB9AF0', 'ChangeUp' = '#23be41', 'Splitter' = '#3bacac', 'Other' = '#Acafaf')
+
+# some useful functions
+strike_zone <- c(-.9, .9, 1.55, 3.35)
+is_in_zone <- function(height, side, zone = strike_zone) {
+  zone <- 0
+  for (i in seq_along(height)) {
+    if (is.na(height[i]) | is.na(side[i])) {
+      zone <- zone
+    } else if (between(height[i], strike_zone[3], strike_zone[4]) &
+               between(side[i], strike_zone[1], strike_zone[2])) {
+      zone <- zone + 1
+    }
+  }
+  return(zone)
+}
+is_swing <- function(pitch_call) {
+  swings <- 0
+  for (i in seq_along(pitch_call)) {
+    if (pitch_call[i] %in% c('StrikeSwinging', 'FoulBall', 'InPlay')) {
+      swings <- swings + 1
+    }
+  }
+  return(swings)
+}
+is_o_swing <- function(height, side, pitch_call, zone = strike_zone) {
+  o_swings <- 0
+  for (i in seq_along(height)) {
+    if ((!is_in_zone(height[i], side[i])) & is_swing(pitch_call[i])) {
+      o_swings <- o_swings + 1
+    }
+  }
+  return(o_swings)
+}
 
 ui <- fluidPage(
   column(10, offset = 1,
@@ -85,18 +117,32 @@ server <- function(input, output, session) {
                            'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                            'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases)) %>% 
           ungroup() %>%
           mutate('Usage %' = round(prop.table(No.), 3)*100)
         table2 <- game %>%
           filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%
           dplyr::summarize('No.' = n(),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases))
         table <- bind_rows(table, table2)
       
       }
@@ -107,7 +153,7 @@ server <- function(input, output, session) {
           dplyr::summarize('No.' = n(),
                            'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
                            'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
                            'Tilt' = AveTilt[1],
                            'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
                            'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
@@ -117,18 +163,32 @@ server <- function(input, output, session) {
                            'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                            'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
-          ungroup() %>%
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases)) %>% 
+          ungroup() %>% 
           mutate('Usage %' = round(prop.table(No.), 3)*100)
         table2 <- game %>%
           filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts %in% input$CountInput) %>%
           dplyr::summarize('No.' = n(),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases))
         table <- bind_rows(table, table2)
       }
       else if (input$SplitInput == "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")) {
@@ -138,7 +198,7 @@ server <- function(input, output, session) {
           dplyr::summarize('No.' = n(),
                            'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
                            'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
                            'Tilt' = AveTilt[1],
                            'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
                            'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
@@ -148,18 +208,32 @@ server <- function(input, output, session) {
                            'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                            'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases)) %>% 
           ungroup() %>%
           mutate('Usage %' = round(prop.table(No.), 3)*100)
         table2 <- game %>%
           filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput) %>%
           dplyr::summarize('No.' = n(),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases))
         table <- bind_rows(table, table2)
       }
       else if (input$SplitInput == "Both" & all(input$PitchInput != "All") & all(input$CountInput != "All")) {
@@ -169,7 +243,7 @@ server <- function(input, output, session) {
           dplyr::summarize('No.' = n(),
                            'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
                            'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
                            'Tilt' = AveTilt[1],
                            'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
                            'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
@@ -179,18 +253,32 @@ server <- function(input, output, session) {
                            'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                            'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases)) %>% 
           ungroup() %>%
           mutate('Usage %' = round(prop.table(No.), 3)*100)
         table2 <- game %>%
           filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput) %>%
           dplyr::summarize('No.' = n(),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases))
         table <- bind_rows(table, table2)
       }
       else if (input$SplitInput != "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")) {
@@ -200,7 +288,7 @@ server <- function(input, output, session) {
           dplyr::summarize('No.' = n(),
                            'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
                            'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
                            'Tilt' = AveTilt[1],
                            'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
                            'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
@@ -210,18 +298,32 @@ server <- function(input, output, session) {
                            'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                            'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases)) %>% 
           ungroup() %>%
           mutate('Usage %' = round(prop.table(No.), 3)*100)
         table2 <- game %>%
           filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput) %>%
           dplyr::summarize('No.' = n(),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases))
         table <- bind_rows(table, table2)
       }
       else if (input$SplitInput != "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")) {
@@ -231,7 +333,7 @@ server <- function(input, output, session) {
           dplyr::summarize('No.' = n(),
                            'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
                            'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
                            'Tilt' = AveTilt[1],
                            'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
                            'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
@@ -241,18 +343,32 @@ server <- function(input, output, session) {
                            'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                            'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases)) %>% 
           ungroup() %>%
           mutate('Usage %' = round(prop.table(No.), 3)*100)
         table2 <- game %>%
           filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts %in% input$CountInput, BatterSide == input$SplitInput) %>%
           dplyr::summarize('No.' = n(),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases))
         table <- bind_rows(table, table2)
       }
       else if (input$SplitInput != "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")) {
@@ -262,7 +378,7 @@ server <- function(input, output, session) {
           dplyr::summarize('No.' = n(),
                            'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
                            'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
                            'Tilt' = AveTilt[1],
                            'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
                            'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
@@ -272,18 +388,32 @@ server <- function(input, output, session) {
                            'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                            'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases)) %>% 
           ungroup() %>%
           mutate('Usage %' = round(prop.table(No.), 3)*100)
         table2 <- game %>%
           filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, BatterSide == input$SplitInput) %>%
           dplyr::summarize('No.' = n(),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases))
         table <- bind_rows(table, table2)
       }
       else {
@@ -293,7 +423,7 @@ server <- function(input, output, session) {
           dplyr::summarize('No.' = n(),
                            'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
                            'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),0),
+                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
                            'Tilt' = AveTilt[1],
                            'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
                            'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
@@ -303,18 +433,32 @@ server <- function(input, output, session) {
                            'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
                            'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100) %>% 
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases)) %>% 
           ungroup() %>%
           mutate('Usage %' = round(prop.table(No.), 3)*100)
         table2 <- game %>%
           filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput, BatterSide == input$SplitInput) %>%
           dplyr::summarize('No.' = n(),
                            'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
                            'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100)
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases))
         table <- bind_rows(table, table2)
       }
     }
@@ -647,7 +791,7 @@ server <- function(input, output, session) {
       
       ggplot(data = dataFilter(), aes(x = HorzBreak, y = InducedVertBreak, color = TaggedPitchType)) +
         scale_color_manual(values = pitch_colors) +
-        labs(x = "Horizontal Movement (in.)", y = "Vertical Movement (in.)", color = " ", title = "Pitch Movement") + 
+        labs(x = "Horizontal Break (in.)", y = "Induced Vertical Break (in.)", color = " ", title = "Pitch Movement") + 
         xlim(-28, 28) + ylim(-28, 28) +
         geom_segment(aes(x = 0, y = -28, xend = 0, yend = 28), linewidth = 1, color = "grey55") + 
         geom_segment(aes(x = -28, y = 0, xend = 28, yend = 0), linewidth = 1, color = "grey55") +
@@ -962,11 +1106,13 @@ server <- function(input, output, session) {
       geom_baseball(league = "MLB") +
         geom_point(data = dataFilter(), aes(round(Distance * sin(Bearing * pi / 180), 3), round(Distance * cos(Bearing * pi / 180), 3),
                        color = ExitSpeed)) +
-        scale_color_gradient(low = 'gold', high = 'blue') +
-        labs(title = "Spray Chart") + 
+        scale_color_gradient(low = 'blue', high = 'red') +
+        labs(title = "Spray Chart", x = "", y = "") + 
         #theme_bw() + 
-        theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), axis.text = element_text(size = 12)) +
-        theme(legend.position = "right", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
+        theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+              axis.text = element_blank(),
+              legend.position = "right",
+              legend.text = element_text(size = 12))
     }
 
   }, width = 450, height = 450)
