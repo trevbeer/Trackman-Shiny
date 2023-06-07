@@ -168,8 +168,19 @@ server <- function(input, output, session) {
         table$hiddenColumn[aux] <- 1
         tableFilter <- reactive({table})
         datatable(tableFilter(), options = list(dom = 't', columnDefs = list(list(visible = FALSE, targets = c(0,ncol(table)))))) %>%
-          formatStyle(c(1,2), `border-left` = "solid 1px") %>% formatStyle(c(2,13,15,19,20), `border-right` = "solid 1px") %>% formatStyle(1:ncol(table), valueColumns = "hiddenColumn",
-                                                                                                                                           `border-bottom` = styleEqual(1, "solid 3px"))
+          formatStyle(c(1,2), `border-left` = "solid 1px") %>% formatStyle(c(2,13,15,19,20), `border-right` = "solid 1px") %>% 
+          formatStyle(1:ncol(table), valueColumns = "hiddenColumn", `border-bottom` = styleEqual(1, "solid 3px")) %>%
+          formatStyle('Strike %',
+                      backgroundColor = styleInterval(c(58.0, 62.0), c('lightcoral', 'white', 'lightgreen'))) %>%
+          formatStyle('Extension',
+                      backgroundColor = styleInterval(c(5.5, 6.5), c('lightcoral', 'white', 'lightgreen'))) %>%
+          formatStyle('Zone %',
+                      backgroundColor = styleInterval(c(47.5, 50.5), c('lightcoral', 'white', 'lightgreen'))) %>%
+          formatStyle('Whiff %',
+                      backgroundColor = styleInterval(c(20, 30), c('lightcoral', 'white', 'lightgreen'))) %>%
+          formatStyle('Chase %',
+                      backgroundColor = styleInterval(c(26, 30), c('lightcoral', 'white', 'lightgreen')))
+          
     }
     else{
         table <- game %>%
@@ -217,8 +228,21 @@ server <- function(input, output, session) {
         table$hiddenColumn[aux] <- 1
         tableFilter <- reactive({table})
         datatable(tableFilter(), options = list(dom = 't', columnDefs = list(list(visible = FALSE, targets = c(0,ncol(table)))))) %>%
-          formatStyle(c(1,2), `border-left` = "solid 1px") %>% formatStyle(c(3,8,10,15), `border-right` = "solid 1px") %>% formatStyle(1:ncol(table), valueColumns = "hiddenColumn",
-                                                                                                                                           `border-bottom` = styleEqual(1, "solid 3px"))
+          formatStyle(c(1,2), `border-left` = "solid 1px") %>% formatStyle(c(3,8,10,15), `border-right` = "solid 1px") %>% 
+          formatStyle(1:ncol(table), valueColumns = "hiddenColumn", `border-bottom` = styleEqual(1, "solid 3px")) %>%
+          formatStyle('wOBA',
+                      backgroundColor = styleInterval(c(.300, .340), c('lightgreen', 'white', 'lightcoral'))) %>%
+          formatStyle('Barrel %',
+                      backgroundColor = styleInterval(c(7, 9), c('lightgreen', 'white', 'lightcoral'))) %>%
+          formatStyle('Avg. EV',
+                      backgroundColor = styleInterval(c(85, 89), c('lightgreen', 'white', 'lightcoral'))) %>%
+          formatStyle('Hard Hit %',
+                      backgroundColor = styleInterval(c(38, 42), c('lightgreen', 'white', 'lightcoral'))) %>%
+          formatStyle('K %',
+                      backgroundColor = styleInterval(c(20, 24), c('lightcoral', 'white', 'lightgreen'))) %>%
+          formatStyle('BB %',
+                      backgroundColor = styleInterval(c(6, 10), c('lightgreen', 'white', 'lightcoral')))
+          
     }
   })
   
