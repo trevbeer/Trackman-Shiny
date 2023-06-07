@@ -179,7 +179,11 @@ server <- function(input, output, session) {
           formatStyle('Whiff %',
                       backgroundColor = styleInterval(c(20, 30), c('lightcoral', 'white', 'lightgreen'))) %>%
           formatStyle('Chase %',
-                      backgroundColor = styleInterval(c(26, 30), c('lightcoral', 'white', 'lightgreen')))
+                      backgroundColor = styleInterval(c(26, 30), c('lightcoral', 'white', 'lightgreen'))) %>%
+          formatStyle('CSW %',
+                      backgroundColor = styleInterval(c(26, 32), c('lightcoral', 'white', 'lightgreen'))) %>%
+          formatStyle('SwStr %',
+                      backgroundColor = styleInterval(c(7, 13), c('lightcoral', 'white', 'lightgreen')))
           
     }
     else{
