@@ -11,6 +11,7 @@ library(knitr)
 library(plyr)
 library(gridExtra) 
 library(readr)
+library(lubridate)
 knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
 #knitr::opts_chunk$set(echo=F, 
 #                      eval=T,
@@ -25,30 +26,27 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 ```{r, include = FALSE}
 # enter csv name
-## trevor
-# total <- read.csv(file = "allGames.csv")
-## taiyo
-total <- read_csv('~/UCLA/Baseball/Trev_Shiny/allGames.csv')
-# removing unnecessary tags, pitchouts etc
-total <- total %>% subset(!TaggedPitchType %in% c("Other", "Knuckleball"))
-# change this line to your team of interest, or remove if no filtering on team
+total <- read.csv(file = "allGames.csv")
+# removing unecessary tags, pitchouts etc
+total <- total %>% subset(TaggedPitchType != "Other")
+total <- total %>% subset(TaggedPitchType != "Knuckleball")
+# just ucla guys, not really necessary line
 total <- total %>% subset(PitcherTeam == "UCLA")
 # remove first names and commas
-total$Pitcher <- str_glue(strsplit(total$Pitcher, ', ')[[1]][2], strsplit(total$Pitcher, ', ')[[1]][1], .sep = ' ')
-total$TaggedPitchType <- factor(total$TaggedPitchType, levels = c("Fastball", "Sinker", "Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter"))
+# total$Pitcher <- str_glue(strsplit(total$Pitcher, ', ')[[1]][2], strsplit(total$Pitcher, ', ')[[1]][1], .sep = ' ')
+total$Pitcher <- sub("(\\w+),\\s(\\w+)","\\2 \\1", total$Pitcher)
+# order pitches so you dont have to later
+total$TaggedPitchType <- factor(total$TaggedPitchType, levels = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter"))
 # total$AbbPitchType
-# create date objects
 total$Date <- as.Date(total$Date, "%m/%d/%Y")
-# create counts
 total$Counts <- str_c(total$Balls, "-", total$Strikes)
 total$HardHit <- ifelse(total$ExitSpeed >= 95, 1, 0)
 total$PlayResult <- ifelse(total$KorBB == "Walk", "Walk", total$PlayResult)
+total$PlayResult <- ifelse((total$KorBB == "Walk") & (total$PitchCall == "BallIntentional"), "IntentionalWalk", total$PlayResult)
 total$PlayResult <- ifelse(total$KorBB == "Strikeout", "Strikeout", total$PlayResult)
 total$PlayResult <- ifelse(total$PitchCall == "HitByPitch", "HitByPitch", total$PlayResult)
 total$ExitSpeed <- ifelse(total$PitchCall == "HitByPitch", NA, total$ExitSpeed)
 total$Angle <- ifelse(total$PitchCall == "HitByPitch", NA, total$Angle)
-total$ExitSpeed <- ifelse(total$TaggedHitType == "Bunt", NA, total$ExitSpeed)
-total$Angle <- ifelse(total$TaggedHitType == "Bunt", NA, total$Angle)
 is_barrel <- function(exit_velo, launch_angle) {
   for (i in seq_along(exit_velo)) {
     if (is.na(exit_velo[i]) | is.na(launch_angle[i]) | exit_velo[i] < 95 | !between(launch_angle[i], 8, 50)) {
@@ -97,7 +95,6 @@ for (i in 1:nrow(total)) {
 ```
 
 ```{r, include = FALSE}
-# want to find a way to average the Tilt (as HH:MM is harder to manipulate)
 scrimData <- total %>% group_by("Pitcher") %>% group_by("TaggedPitchType")
 # Overall
 # Function to convert a time in HH:MM:SS format to a numeric value representing the number of seconds
@@ -110,6 +107,8 @@ convert_to_seconds <- function(hand, time) {
   # without this, average of 12:30 and 1:00 spits junk value around 6:00,
   # instead of 12:45
   hours <- ifelse(hand == "Right" & hours == 12, 0, hours)
+  hours <- ifelse(hand == "Right" & hours == 11, -1, hours)
+  hours <- ifelse(hand == "Left" & hours == 1, 13, hours)
   return(hours * 3600 + minutes * 60 + seconds)
 }
 
@@ -152,10 +151,9 @@ tiltSummary$AveTilt <- as.character(format(tiltRound,"%H:%M"))
 ```
 
 ```{r}
-# cleaned csv
 cleaned <- merge(total, tiltSummary, by = c("Pitcher", "TaggedPitchType"), all = TRUE)
-# change to your path
 write.csv(cleaned, "C:\\Users\\tbeer\\Documents\\UCLA\\Baseball Analytics\\Shiny\\Shiny Testing\\cleanedGames.csv", row.names = FALSE)
 ```
+
 
 
