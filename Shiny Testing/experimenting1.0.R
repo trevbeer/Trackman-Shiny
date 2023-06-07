@@ -6,11 +6,8 @@ library(sportyR)
 
 # csv read
 game <- read.csv("cleanedGames.csv")
-game <- game %>% filter(PitcherTeam == 'UCLA')
 game$Date <- as.Date(game$Date)
 game$TaggedPitchType <- factor(game$TaggedPitchType, levels = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter"))
-# this line needs work
-# game$pitch_type <- factor(game$pitch_type, levels = c("FF", "SI", "FC", "CS", "CU", "KC", "SL", "CH", "FS"))
 pitch_colors <- c('Fastball' = '#d22d49', 'Sinker' = '#fe9d00', 'Cutter' = '#933f2c', 'Curveball' = '#00d1ed',
                   'Slider' = '#c3bd0d', 'Sweeper' = '#CB9AF0', 'ChangeUp' = '#23be41', 'Splitter' = '#3bacac', 'Other' = '#Acafaf')
 
@@ -60,23 +57,24 @@ ui <- fluidPage(
            column(2, selectInput(inputId = "ReportInput", label = "Select Report Type", choices = c("Pitch Metrics", "Batted Ball")))
          ),
          hr(style="border-color: black;"),
-          wellPanel(style = "background: white; border-color:black; border-width:2px",
-                    fluidRow(
-                      column(2, img(src = "bruinlogo.png", height = 150, width = 150), align = "center"),
-                      column(4, h2(strong(textOutput("selected_pitcher"))), hr(style="border-color: black;"), style = "padding-right:0px;"),
-                      column(6, h2("Post-Game Report"), hr(style="border-color: black;"), h2(textOutput("selected_game")), align = "right", style = "padding-left:0px;")),
-                    hr(style="border-color: black;"),
-                    fluidRow(
-                      column(10, offset = 1, h3(strong("Pitcher Summary Table")), dataTableOutput("pitcher_summary_table"), align = "center")
-                    ), br(), br(),
-                    fluidRow(
-                      column(4, plotOutput("pitch_movement_plot"), align = "center"),
-                      column(4, plotOutput("pitch_location_plot"), align = "center"),
-                      column(4, plotOutput("pitch_velocity_plot"), align = "center")
-                    ), br(), br(), br()
-          ), br(),
-          p(em("If the contents of this page appear distorted, please decrease your web browser zoom to 80% or 90%."), align = "center")
- )
+         wellPanel(style = "background: white; border-color:black; border-width:2px",
+                   fluidRow(
+                     column(2, img(src = "bruinlogo.png", height = 150, width = 150), align = "center"),
+                     column(4, h2(strong(textOutput("selected_pitcher"))), hr(style="border-color: black;"), style = "padding-right:0px;"),
+                     column(6, h2("Post-Game Report"), hr(style="border-color: black;"), h2(textOutput("selected_game")), align = "right", style = "padding-left:0px;")),
+                   hr(style="border-color: black;"),
+                   fluidRow(
+                     # offset = 1 arg removed to fit whole table
+                     column(10,  h3(strong("Pitcher Summary Table")), dataTableOutput("pitcher_summary_table"), align = "center")
+                   ), br(), br(),
+                   fluidRow(
+                     column(4, plotOutput("pitch_movement_plot"), align = "center"),
+                     column(4, plotOutput("pitch_location_plot"), align = "center"),
+                     column(4, plotOutput("pitch_velocity_plot"), align = "center")
+                   ), br(), br(), br()
+         ), br(),
+         p(em("If the contents of this page appear distorted, please decrease your web browser zoom to 80% or 90%."), align = "center")
+  )
 )
 
 
@@ -98,691 +96,157 @@ server <- function(input, output, session) {
   
   output$selected_count <- renderText({paste(input$CountInput)})
   
+  
+  
   output$pitcher_summary_table <- renderDataTable({
-    if(input$ReportInput == "Pitch Metrics"){
-      if(input$SplitInput == "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('No.' = n(),
-                           'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
-                           'Tilt' = AveTilt[1],
-                           'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                           'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                           'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                           'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 1),
-                           'HB' = round(mean(HorzBreak, na.rm = TRUE), 1),
-                           'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                           'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases)) %>% 
-          ungroup() %>%
-          mutate('Usage %' = round(prop.table(No.), 3)*100)
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%
-          dplyr::summarize('No.' = n(),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases))
-        table <- bind_rows(table, table2)
-      
-      }
-      else if (input$SplitInput == "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts %in% input$CountInput) %>%
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('No.' = n(),
-                           'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
-                           'Tilt' = AveTilt[1],
-                           'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                           'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                           'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                           'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 1),
-                           'HB' = round(mean(HorzBreak, na.rm = TRUE), 1),
-                           'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                           'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases)) %>% 
-          ungroup() %>% 
-          mutate('Usage %' = round(prop.table(No.), 3)*100)
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts %in% input$CountInput) %>%
-          dplyr::summarize('No.' = n(),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases))
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput == "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput) %>%
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('No.' = n(),
-                           'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
-                           'Tilt' = AveTilt[1],
-                           'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                           'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                           'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                           'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 1),
-                           'HB' = round(mean(HorzBreak, na.rm = TRUE), 1),
-                           'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                           'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases)) %>% 
-          ungroup() %>%
-          mutate('Usage %' = round(prop.table(No.), 3)*100)
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput) %>%
-          dplyr::summarize('No.' = n(),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases))
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput == "Both" & all(input$PitchInput != "All") & all(input$CountInput != "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput) %>%
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('No.' = n(),
-                           'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
-                           'Tilt' = AveTilt[1],
-                           'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                           'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                           'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                           'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 1),
-                           'HB' = round(mean(HorzBreak, na.rm = TRUE), 1),
-                           'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                           'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases)) %>% 
-          ungroup() %>%
-          mutate('Usage %' = round(prop.table(No.), 3)*100)
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput) %>%
-          dplyr::summarize('No.' = n(),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases))
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput != "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput) %>%
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('No.' = n(),
-                           'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
-                           'Tilt' = AveTilt[1],
-                           'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                           'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                           'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                           'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 1),
-                           'HB' = round(mean(HorzBreak, na.rm = TRUE), 1),
-                           'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                           'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases)) %>% 
-          ungroup() %>%
-          mutate('Usage %' = round(prop.table(No.), 3)*100)
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput) %>%
-          dplyr::summarize('No.' = n(),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases))
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput != "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, Counts %in% input$CountInput) %>%
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('No.' = n(),
-                           'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
-                           'Tilt' = AveTilt[1],
-                           'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                           'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                           'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                           'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 1),
-                           'HB' = round(mean(HorzBreak, na.rm = TRUE), 1),
-                           'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                           'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases)) %>% 
-          ungroup() %>%
-          mutate('Usage %' = round(prop.table(No.), 3)*100)
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts %in% input$CountInput, BatterSide == input$SplitInput) %>%
-          dplyr::summarize('No.' = n(),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases))
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput != "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput) %>%
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('No.' = n(),
-                           'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
-                           'Tilt' = AveTilt[1],
-                           'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                           'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                           'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                           'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 1),
-                           'HB' = round(mean(HorzBreak, na.rm = TRUE), 1),
-                           'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                           'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases)) %>% 
-          ungroup() %>%
-          mutate('Usage %' = round(prop.table(No.), 3)*100)
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, BatterSide == input$SplitInput) %>%
-          dplyr::summarize('No.' = n(),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases))
-        table <- bind_rows(table, table2)
-      }
-      else {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput) %>%
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('No.' = n(),
-                           'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
-                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
-                           'Tilt' = AveTilt[1],
-                           'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
-                           'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
-                           'Extension' = round(mean(Extension, na.rm = TRUE), 2),
-                           'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 1),
-                           'HB' = round(mean(HorzBreak, na.rm = TRUE), 1),
-                           'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
-                           'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases)) %>% 
-          ungroup() %>%
-          mutate('Usage %' = round(prop.table(No.), 3)*100)
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput, BatterSide == input$SplitInput) %>%
-          dplyr::summarize('No.' = n(),
-                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
-                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
-                           "Zone %" = round(in_zones/n(), 3)*100,
-                           out_zones = n() - in_zones,
-                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
-                           "Chase %" = round(chases/out_zones, 3)*100,
-                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
-                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
-                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
-                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
-          select(-c(in_zones, out_zones, chases))
-        table <- bind_rows(table, table2)
-      }
+    if(any(input$PitchInput == "All")){
+      pitchinput = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter")
     }
     else{
-      if(input$SplitInput == "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PlayResult != "Undefined") %>% 
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100
-                           ) %>%
-          ungroup()
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PlayResult != "Undefined") %>% 
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100)
-        table <- bind_rows(table, table2)
-          
-                           
-      }
-      else if(input$SplitInput == "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PlayResult != "Undefined", Counts %in% input$CountInput) %>% 
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100
-          ) %>%
-          ungroup()
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PlayResult != "Undefined", Counts %in% input$CountInput) %>% 
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100)
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput == "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, PlayResult != "Undefined") %>% 
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100
-          ) %>%
-          ungroup()
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, PlayResult != "Undefined") %>% 
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100)
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput == "Both" & all(input$PitchInput != "All") & all(input$CountInput != "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, PlayResult != "Undefined", Counts %in% input$CountInput) %>% 
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100
-          ) %>%
-          ungroup()
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, PlayResult != "Undefined", Counts %in% input$CountInput) %>% 
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100)
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput != "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, PlayResult != "Undefined") %>% 
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100
-          ) %>%
-          ungroup()
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, PlayResult != "Undefined") %>% 
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100)
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput != "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")) {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, PlayResult != "Undefined", Counts %in% input$CountInput) %>% 
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100
-          ) %>%
-          ungroup()
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, PlayResult != "Undefined", Counts %in% input$CountInput) %>% 
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100)
-        table <- bind_rows(table, table2)
-      }
-      else if (input$SplitInput != "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")) {
-        table <- game %>%
-          table <- game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, PlayResult != "Undefined") %>% 
-            group_by('Pitch' = TaggedPitchType) %>%
-            dplyr::summarize('PA' = n(),
-                             'BIP' = sum(PitchCall == "InPlay"),
-                             'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                             'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                             'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                             'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                             'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                             'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                             'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                             'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                             'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100
-            ) %>%
-            ungroup()
-          table2 <- game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, PlayResult != "Undefined") %>% 
-            dplyr::summarize('PA' = n(),
-                             'BIP' = sum(PitchCall == "InPlay"),
-                             'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                             'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                             'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                             'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                             'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                             'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                             'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                             'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                             'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100)
-          table <- bind_rows(table, table2)
-      }
-      else {
-        table <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, PlayResult != "Undefined", Counts %in% input$CountInput) %>% 
-          group_by('Pitch' = TaggedPitchType) %>%
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100
-          ) %>%
-          ungroup()
-        table2 <- game %>%
-          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, PlayResult != "Undefined", Counts %in% input$CountInput) %>% 
-          dplyr::summarize('PA' = n(),
-                           'BIP' = sum(PitchCall == "InPlay"),
-                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
-                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
-                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/n(), 3)*100,
-                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
-                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
-                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
-                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
-                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100)
-        table <- bind_rows(table, table2)
-      }
+      pitchinput = input$PitchInput
     }
-    aux <- nrow(table) - 1
-    table$hiddenColumn <- 0
-    table$hiddenColumn[aux] <- 1
-    tableFilter <- reactive({table})
-    datatable(tableFilter(), options = list(dom = 't', columnDefs = list(list(visible = FALSE, targets = c(0,ncol(table)))))) %>%
-      formatStyle(c(1,2), `border-left` = "solid 1px") %>% formatStyle(c(2,13,17), `border-right` = "solid 1px") %>% formatStyle(1:ncol(table), valueColumns = "hiddenColumn",
-                                                                                                                            `border-bottom` = styleEqual(1, "solid 3px")) 
+    if(any(input$CountInput == "All")){
+      countinput = c("0-0", "0-1", "0-2", "1-0", "1-1", "1-2", "2-0", "2-1", "2-2", "3-0", "3-1", "3-2")
+    }
+    else{
+      countinput = input$CountInput
+    }
+    if(input$SplitInput == "Both"){
+      splitinput = c("Right", "Left")
+    }
+    else{
+      splitinput = input$SplitInput
+    }
+    
+    if(input$ReportInput == "Pitch Metrics"){
+        table <- game %>%
+          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide %in% splitinput, TaggedPitchType %in% pitchinput, Counts %in% countinput) %>%
+          group_by('Pitch' = TaggedPitchType) %>%
+          dplyr::summarize('No.' = n(),
+                           'Max Velo (MPH)' = round(max(RelSpeed, na.rm = TRUE),1),
+                           'Avg. Velo (MPH)' = round(mean(RelSpeed, na.rm = TRUE),1),
+                           'Avg. Spin (RPM)' = round(mean(SpinRate, na.rm = TRUE),-1),
+                           'Tilt' = AveTilt[1],
+                           'RelHeight' = round(mean(RelHeight, na.rm = TRUE), 2),
+                           'RelSide' = round(mean(RelSide, na.rm = TRUE), 2),
+                           'Extension' = round(mean(Extension, na.rm = TRUE), 2),
+                           'IVB' = round(mean(InducedVertBreak, na.rm = TRUE), 1),
+                           'HB' = round(mean(HorzBreak, na.rm = TRUE), 1),
+                           'VAA' = round(mean(VertApprAngle, na.rm = TRUE), 2),
+                           'HAA' = round(mean(HorzApprAngle, na.rm = TRUE), 2),
+                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
+                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases)) %>% 
+          ungroup() %>%
+          mutate('Usage %' = round(prop.table(No.), 3)*100)
+        table2 <- game %>%
+          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% pitchinput, Counts %in% countinput, BatterSide %in% splitinput) %>%
+          dplyr::summarize('No.' = n(),
+                           'Strike %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", "InPlay"))/n(),3)*100,
+                           in_zones = sum(is_in_zone(PlateLocHeight, PlateLocSide)),
+                           "Zone %" = round(in_zones/n(), 3)*100,
+                           out_zones = n() - in_zones,
+                           chases = sum(is_o_swing(PlateLocHeight, PlateLocSide, PitchCall)),
+                           "Chase %" = round(chases/out_zones, 3)*100,
+                           'Whiff %' = round(sum(PitchCall %in% c("StrikeSwinging"))/
+                                               sum(PitchCall %in% c("StrikeSwinging", "FoulBall", "InPlay")),3)*100,
+                           "SwStr %" = round(sum(PitchCall %in% c("StrikeSwinging"))/n(), 3)*100,
+                           'CSW %' = round(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"))/n(),3)*100) %>% 
+          select(-c(in_zones, out_zones, chases))
+        table <- bind_rows(table, table2)
+        
+        aux <- nrow(table) - 1
+        table$hiddenColumn <- 0
+        table$hiddenColumn[aux] <- 1
+        tableFilter <- reactive({table})
+        datatable(tableFilter(), options = list(dom = 't', columnDefs = list(list(visible = FALSE, targets = c(0,ncol(table)))))) %>%
+          formatStyle(c(1,2), `border-left` = "solid 1px") %>% formatStyle(c(2,13,15,19,20), `border-right` = "solid 1px") %>% formatStyle(1:ncol(table), valueColumns = "hiddenColumn",
+                                                                                                                                           `border-bottom` = styleEqual(1, "solid 3px"))
+    }
+    else{
+        table <- game %>%
+          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide %in% splitinput, TaggedPitchType %in% pitchinput, PlayResult != "Undefined", Counts %in% countinput) %>% 
+          group_by('Pitch' = TaggedPitchType) %>%
+          dplyr::summarize('PA' = n(),
+                           'BIP' = sum(PitchCall == "InPlay"),
+                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
+                           'Max. EV' = round(max(ExitSpeed, na.rm = TRUE),1),
+                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
+                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/sum(PitchCall == "InPlay"), 3)*100,
+                           'Barrel %' = round(sum(Barrel, na.rm = TRUE)/sum(PitchCall == "InPlay"), 3)*100,
+                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
+                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
+                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
+                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
+                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
+                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100,
+                           'wOBA' = round(((.693*sum(PlayResult == "Walk") + .693*sum(PlayResult == "HitByPitch") + .884*sum(PlayResult == "Single") + 1.261*sum(PlayResult == "Double") + 1.601*sum(PlayResult == "Triple") + 2.072*sum(PlayResult == "HomeRun"))/(n()-sum(PlayResult == "IntentionalWalk"))),3)
+                           
+                         #  0.693*totalHBB$x +.884*totalS$x + 1.261*totalD$x + 1.601*totalT$x + 2.072*totalH$x)/(totalAB$x + totalHBB$x + totalSac$x
+          ) %>%
+          ungroup()
+        table2 <- game %>%
+          filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide %in% splitinput, TaggedPitchType %in% pitchinput, PlayResult != "Undefined", Counts %in% countinput) %>% 
+          dplyr::summarize('PA' = n(),
+                           'BIP' = sum(PitchCall == "InPlay"),
+                           'Avg. EV' = round(mean(ExitSpeed, na.rm = TRUE),1),
+                           'Max. EV' = round(max(ExitSpeed, na.rm = TRUE),1),
+                           'Avg. LA' = round(mean(Angle, na.rm = TRUE),1),
+                           'Hard Hit %' = round(sum(HardHit, na.rm = TRUE)/sum(PitchCall == "InPlay"), 3)*100,
+                           'Barrel %' = round(sum(Barrel, na.rm = TRUE)/sum(PitchCall == "InPlay"), 3)*100,
+                           'K %' = round(sum(PlayResult == "Strikeout")/n(), 3)*100,
+                           'BB %' = round(sum(PlayResult == "Walk")/n(), 3)*100,
+                           'GB %' = round(sum(TaggedHitType == "GroundBall")/sum(PitchCall == "InPlay"), 3)*100,
+                           'FB %' = round(sum(TaggedHitType == "FlyBall")/sum(PitchCall == "InPlay"), 3)*100,
+                           'LD %' = round(sum(TaggedHitType == "LineDrive")/sum(PitchCall == "InPlay"), 3)*100,
+                           'PU %' = round(sum(TaggedHitType == "Popup")/sum(PitchCall == "InPlay"), 3)*100,
+                           'wOBA' = round(((.693*sum(PlayResult == "Walk") + .693*sum(PlayResult == "HitByPitch") + .884*sum(PlayResult == "Single") + 1.261*sum(PlayResult == "Double") + 1.601*sum(PlayResult == "Triple") + 2.072*sum(PlayResult == "HomeRun"))/(n()-sum(PlayResult == "IntentionalWalk"))),3)
+          )
+        table <- bind_rows(table, table2)
+        
+        aux <- nrow(table) - 1
+        table$hiddenColumn <- 0
+        table$hiddenColumn[aux] <- 1
+        tableFilter <- reactive({table})
+        datatable(tableFilter(), options = list(dom = 't', columnDefs = list(list(visible = FALSE, targets = c(0,ncol(table)))))) %>%
+          formatStyle(c(1,2), `border-left` = "solid 1px") %>% formatStyle(c(3,8,10,15), `border-right` = "solid 1px") %>% formatStyle(1:ncol(table), valueColumns = "hiddenColumn",
+                                                                                                                                           `border-bottom` = styleEqual(1, "solid 3px"))
+    }
   })
   
   output$pitch_movement_plot <- renderPlot({
+    if(any(input$PitchInput == "All")){
+      pitchinput = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter")
+    }
+    else{
+      pitchinput = input$PitchInput
+    }
+    if(any(input$CountInput == "All")){
+      countinput = c("0-0", "0-1", "0-2", "1-0", "1-1", "1-2", "2-0", "2-1", "2-2", "3-0", "3-1", "3-2")
+    }
+    else{
+      countinput = input$CountInput
+    }
+    if(input$SplitInput == "Both"){
+      splitinput = c("Right", "Left")
+    }
+    else{
+      splitinput = input$SplitInput
+    }
+    
     if(input$ReportInput == "Pitch Metrics"){
-      if(input$SplitInput == "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
         dataFilter <- reactive({
           game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]))
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide %in% splitinput, TaggedPitchType %in% pitchinput, Counts %in% countinput)
         })
-      }
-      else if(input$SplitInput == "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts %in% input$CountInput)
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput)
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, Counts %in% input$CountInput)
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput)
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput)
-        })
-      }
-      else if(input$SplitInput != "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, BatterSide == input$SplitInput)
-        })
-      }
-      else{
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput)
-        })
-      }
-      
       means <- dataFilter() %>% 
         group_by(TaggedPitchType) %>% 
         dplyr::summarize(InducedVertBreak = mean(InducedVertBreak, na.rm = T),
@@ -801,50 +265,15 @@ server <- function(input, output, session) {
         theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
     }
     else{
-      if(input$SplitInput == "Both" & any(input$CountInput == "All")){
         dataFilter <- reactive({
           game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide %in% splitinput, Counts %in% countinput) %>%
             group_by(TaggedPitchType, Date) %>%
             dplyr::summarize('No.' = n()) %>%
             ungroup() %>%
             group_by(Date) %>%
             mutate('Usage' = round(prop.table(No.), 3)*100)
         })
-      }
-      else if(input$SplitInput == "Both" & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts %in% input$CountInput) %>%
-            group_by(TaggedPitchType, Date) %>%
-            dplyr::summarize('No.' = n()) %>%
-            ungroup() %>%
-            group_by(Date) %>%
-            mutate('Usage' = round(prop.table(No.), 3)*100)
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput) %>%
-            group_by(TaggedPitchType, Date) %>%
-            dplyr::summarize('No.' = n()) %>%
-            ungroup() %>%
-            group_by(Date) %>%
-            mutate('Usage' = round(prop.table(No.), 3)*100)
-        })
-      }
-      else{
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, Counts %in% input$CountInput) %>%
-            group_by(TaggedPitchType, Date) %>%
-            dplyr::summarize('No.' = n()) %>%
-            ungroup() %>%
-            group_by(Date) %>%
-            mutate('Usage' = round(prop.table(No.), 3)*100)
-        })
-      }
       ggplot(data = dataFilter()) +
         geom_point(aes(x = Date, y = Usage, color = TaggedPitchType)) +
         geom_line(aes(x = Date, y = Usage, color = TaggedPitchType)) +
@@ -853,110 +282,43 @@ server <- function(input, output, session) {
         theme_bw() + theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5)) +
         theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
     }
-
+    
   }, width = 450, height = 450)
   
   
   output$pitch_location_plot <- renderPlot({
-    if(input$ReportInput == "Pitch Metrics"){
-      if(input$SplitInput == "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]))
-        })
-      }
-      else if(input$SplitInput == "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts %in% input$CountInput)
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput)
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, Counts %in% input$CountInput)
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput)
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput)
-        })
-      }
-      else if(input$SplitInput != "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, BatterSide == input$SplitInput)
-        })
-      }
-      else{
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput)
-        })
-      }
+    if(any(input$PitchInput == "All")){
+      pitchinput = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter")
     }
     else{
-      if(input$SplitInput == "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
+      pitchinput = input$PitchInput
+    }
+    if(any(input$CountInput == "All")){
+      countinput = c("0-0", "0-1", "0-2", "1-0", "1-1", "1-2", "2-0", "2-1", "2-2", "3-0", "3-1", "3-2")
+    }
+    else{
+      countinput = input$CountInput
+    }
+    if(input$SplitInput == "Both"){
+      splitinput = c("Right", "Left")
+    }
+    else{
+      splitinput = input$SplitInput
+    }
+    
+    if(input$ReportInput == "Pitch Metrics"){
         dataFilter <- reactive({
           game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == "InPlay")
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide %in% splitinput, TaggedPitchType %in% pitchinput, Counts %in% countinput)
         })
-      }
-      else if(input$SplitInput == "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
+      
+    }
+    else{
         dataFilter <- reactive({
           game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == "InPlay", Counts %in% input$CountInput)
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide %in% splitinput, TaggedPitchType %in% pitchinput, PitchCall == "InPlay", Counts %in% countinput)
         })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, PitchCall == "InPlay")
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, PitchCall == "InPlay", Counts %in% input$CountInput)
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, PitchCall == "InPlay")
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, PitchCall == "InPlay", Counts %in% input$CountInput)
-        })
-      }
-      else if(input$SplitInput != "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, PitchCall == "InPlay", BatterSide == input$SplitInput)
-        })
-      }
-      else{
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, PitchCall == "InPlay", Counts %in% input$CountInput)
-        })
-      }
+      
     }
     ggplot(data = dataFilter(), aes(x = PlateLocSide, y = PlateLocHeight, color = TaggedPitchType)) +
       xlim(-3,3) + ylim(0,5) + labs(color = "", title = "Pitch Location") +
@@ -974,71 +336,33 @@ server <- function(input, output, session) {
   
   
   output$pitch_velocity_plot <- renderPlot({
+    if(any(input$PitchInput == "All")){
+      pitchinput = c("Fastball", "Sinker","Cutter", "Curveball", "Slider", "Sweeper", "ChangeUp", "Splitter")
+    }
+    else{
+      pitchinput = input$PitchInput
+    }
+    if(any(input$CountInput == "All")){
+      countinput = c("0-0", "0-1", "0-2", "1-0", "1-1", "1-2", "2-0", "2-1", "2-2", "3-0", "3-1", "3-2")
+    }
+    else{
+      countinput = input$CountInput
+    }
+    if(input$SplitInput == "Both"){
+      splitinput = c("Right", "Left")
+    }
+    else{
+      splitinput = input$SplitInput
+    }
+    
     if(input$ReportInput == "Pitch Metrics"){
-      if(input$SplitInput == "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
         dataFilter <- reactive({
           game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2])) %>%
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide %in% splitinput, TaggedPitchType %in% pitchinput, Counts %in% countinput) %>%
             group_by(TaggedPitchType) %>%
             dplyr::mutate(PitchNum = row_number())
         })
-      }
-      else if(input$SplitInput == "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), Counts %in% input$CountInput) %>%
-            group_by(TaggedPitchType) %>%
-            dplyr::mutate(PitchNum = row_number())
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput) %>%
-            group_by(TaggedPitchType) %>%
-            dplyr::mutate(PitchNum = row_number())
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, Counts %in% input$CountInput) %>%
-            group_by(TaggedPitchType) %>%
-            dplyr::mutate(PitchNum = row_number())
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput) %>%
-            group_by(TaggedPitchType) %>%
-            dplyr::mutate(PitchNum = row_number())
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput) %>%
-            group_by(TaggedPitchType) %>%
-            dplyr::mutate(PitchNum = row_number())
-        })
-      }
-      else if(input$SplitInput != "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), TaggedPitchType %in% input$PitchInput, BatterSide == input$SplitInput) %>%
-            group_by(TaggedPitchType) %>%
-            dplyr::mutate(PitchNum = row_number())
-        })
-      }
-      else{
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput) %>%
-            group_by(TaggedPitchType) %>%
-            dplyr::mutate(PitchNum = row_number())
-        })
-      }
+      
       ggplot(data = dataFilter()) + 
         geom_line(aes(y = RelSpeed, x = PitchNum, color = TaggedPitchType), linewidth = 1.5) + 
         scale_color_manual(values = pitch_colors) +
@@ -1047,65 +371,15 @@ server <- function(input, output, session) {
         theme(legend.position = "bottom", legend.text = element_text(size = 12), axis.title = element_text(size = 14))
     }
     else{
-      if(input$SplitInput == "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
         dataFilter <- reactive({
           game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50) %>% 
+            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, BatterSide %in% splitinput, TaggedPitchType %in% pitchinput, Counts %in% countinput) %>% 
             select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
         })
-      }
-      else if(input$SplitInput == "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, Counts %in% input$CountInput) %>% 
-            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, BatterSide == input$SplitInput) %>% 
-            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
-        })
-      }
-      else if(input$SplitInput != "Both" & any(input$PitchInput == "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, BatterSide == input$SplitInput, Counts %in% input$CountInput) %>% 
-            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, TaggedPitchType %in% input$PitchInput) %>% 
-            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
-        })
-      }
-      else if(input$SplitInput == "Both" & all(input$PitchInput != "All") & all(input$CountInput != "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput) %>% 
-            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
-        })
-      }
-      else if(input$SplitInput != "Both" & all(input$PitchInput != "All") & any(input$CountInput == "All")){
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput) %>% 
-            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
-        })
-      }
-      else{
-        dataFilter <- reactive({
-          game %>%
-            filter(Pitcher == input$PitcherInput, between(Date, input$DateRangeInput[1], input$DateRangeInput[2]), PitchCall == 'InPlay', TaggedHitType != 'Bunt', abs(Bearing) < 50, BatterSide == input$SplitInput, TaggedPitchType %in% input$PitchInput, Counts %in% input$CountInput) %>% 
-            select(Bearing, Distance, Angle, ExitSpeed, TaggedHitType, PlayResult)
-        })
-      }
+      
       geom_baseball(league = "MLB") +
         geom_point(data = dataFilter(), aes(round(Distance * sin(Bearing * pi / 180), 3), round(Distance * cos(Bearing * pi / 180), 3),
-                       color = ExitSpeed)) +
+                                            color = ExitSpeed)) +
         scale_color_gradient(low = 'blue', high = 'red') +
         labs(title = "Spray Chart", x = "", y = "") + 
         #theme_bw() + 
@@ -1114,7 +388,7 @@ server <- function(input, output, session) {
               legend.position = "right",
               legend.text = element_text(size = 12))
     }
-
+    
   }, width = 450, height = 450)
   
 }
