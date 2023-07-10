@@ -1,0 +1,214 @@
+---
+title: "Stuff Testing"
+output: pdf_document
+date: "2023-07-09"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(pander)
+library(knitr)
+library(plyr)
+library(gridExtra) 
+library(readr)
+library(lubridate)
+library(xgboost)
+library(modelr)
+library(data.table)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# add more if not lazy
+ucla <- read.csv("allGames.csv")
+ucsb <- read.csv("SBGames.csv")
+lbsu <- read.csv("beach.csv")
+ua <- read.csv("arizona_tot.csv")
+uo <- read.csv("oregon_23.csv")
+uw <- read.csv("uw_tot.csv")
+usc <- read.csv("usc.csv")
+lmu <- read.csv("LMUthru4-24.csv")
+
+# had extra columns for some reason
+ua <- ua[,1:167]
+uo <- uo[,1:167]
+uw <- uw[,1:167]
+
+# maybe not necessary for ucla (sample size thoooooo)
+ucla <- ucla %>% filter(PitcherTeam == "UCLA")
+ucsb <- ucsb %>% filter(PitcherTeam == "SAN_GAU")
+lbsu <- lbsu %>% filter(PitcherTeam == "LON_DIR")
+ua <- ua %>% filter(PitcherTeam == "ARI_WIL")
+uo <- uo %>% filter(PitcherTeam == "ORE_DUC")
+uw <- uw %>% filter(PitcherTeam == "WAS_HUS")
+usc <- usc %>% filter(PitcherTeam == "SOU_TRO")
+lmu <- lmu %>% filter(PitcherTeam == "LOY_LIO")
+```
+
+```{r}
+ncaa <- rbind(ucla, ucsb, lbsu, ua, uo, uw, usc, lmu)
+# confirm lump into changeup
+# count(ncaa$TaggedPitchType == "Splitter")
+
+ncaa$CSW <- factor(if_else((ncaa$PitchCall == "StrikeCalled")|(ncaa$PitchCall == "StrikeSwinging"), 1, 0))
+
+ncaa$TaggedPitchType <- if_else(ncaa$TaggedPitchType == "TwoSeamFastBall", "Fastball", ncaa$TaggedPitchType)
+ncaa$TaggedPitchType <- if_else(ncaa$TaggedPitchType == "FourSeamFastBall", "Fastball", ncaa$TaggedPitchType)
+ncaa$TaggedPitchType <- if_else(ncaa$TaggedPitchType == "Splitter", "ChangeUp", ncaa$TaggedPitchType)
+ncaa$TaggedPitchType <- if_else(ncaa$TaggedPitchType == "CurveBall", "Curveball", ncaa$TaggedPitchType)
+ncaa$TaggedPitchType <- if_else(ncaa$TaggedPitchType == "Sweeper", "Slider", ncaa$TaggedPitchType)
+
+ncaa1 <- ncaa %>% filter(TaggedPitchType != "Other", TaggedPitchType != "Undefined", !is.na(RelSpeed), !is.na(SpinRate), !is.na(InducedVertBreak), !is.na(HorzBreak), !is.na(RelHeight), !is.na(RelSide), !is.na(Extension), !is.na(SpinAxis)) %>%
+  mutate(RelSide = if_else(PitcherThrows == "Right", RelSide, -RelSide), HorzBreak = if_else(PitcherThrows == "Right", HorzBreak, -HorzBreak), SpinAxis = if_else(PitcherThrows == "Right", SpinAxis, -SpinAxis),
+         PlateLocSide = if_else(PitcherThrows == "Right", PlateLocSide, -PlateLocSide),
+         Count = paste(Balls, Strikes, sep="-"))
+```
+
+```{r}
+# pitcher season metrics
+pitcher_fb <- ncaa1 %>% filter(TaggedPitchType %in% c("Fastball", "Sinker")) %>% 
+  group_by(Pitcher) %>% 
+  dplyr::summarize(FBVelo = mean(RelSpeed, na.rm=T), FBIVB = mean(InducedVertBreak, na.rm=T), FBHB = mean(HorzBreak, na.rm=T), FBAxis = mean(SpinAxis, na.rm=T))
+
+ncaa2 <- ncaa1 %>% left_join(pitcher_fb, by = "Pitcher") %>% 
+  mutate(AxisDif = SpinAxis - FBAxis, VeloDif = RelSpeed - FBVelo, IVBDif = FBIVB - InducedVertBreak, HBDif = HorzBreak - FBHB)
+
+# remove Plate and Count for "Stuff" vs "Pitching"
+final_vars <- ncaa2 %>% select(CSW, starts_with("FB"), RelSpeed, SpinRate, Extension, RelSide, RelHeight, InducedVertBreak, HorzBreak, TaggedPitchType, SpinAxis, AxisDif, VeloDif, IVBDif, HBDif, PlateLocHeight, PlateLocSide, Count)
+```
+
+```{r}
+library(caret)
+# remove Count for "Stuff"
+dmy <- dummyVars("~Count+TaggedPitchType", data = final_vars)
+trsf <- data.frame(predict(dmy, newdata = final_vars))
+# same as above
+vars <- cbind(final_vars, trsf) %>% select(-c(Count, TaggedPitchType)) %>% filter(!is.na(CSW))
+
+library(tidymodels)
+library(mlr)
+
+t_pitching_split <- initial_split(vars, strata = CSW, prop = .7) 
+train <- training(t_pitching_split)
+test <- testing(t_pitching_split)
+
+traintask <- makeClassifTask (data = train,target = "CSW", positive = "1")
+testtask <- makeClassifTask (data = test,target = "CSW", positive = "1")
+```
+
+```{r}
+lrn <- makeLearner("classif.xgboost", predict.type = "prob")
+lrn$par.vals <- list( objective="binary:logistic", eval_metric="error")
+
+#set parameter space
+params <- makeParamSet( makeDiscreteParam("booster",values = "gbtree"),
+                        makeIntegerParam("max_depth",lower = 3L,upper = 14L), 
+                        makeIntegerParam("min_child_weight",lower = 3L,upper = 10L), 
+                        makeNumericParam("subsample",lower = 0.3,upper = 1), 
+                        makeNumericParam("colsample_bytree",lower = 0.3,upper = 1),
+                        makeIntegerParam("gamma",lower = 0L,upper = 5L),
+                        makeIntegerParam("alpha",lower = 0L,upper = 5L),
+                        makeDiscreteParam("nrounds", 
+                                          values = c(50, 100, 200, 300, 400, 500, 600, 700)),
+                        makeDiscreteParam("eta",
+                                          values = c(.01, .03, .05, .075, .1, .15, .2)))
+
+rdesc <- makeResampleDesc("CV", iters=5L)
+
+#search strategy
+ctrl <- makeTuneControlRandom(maxit = 10L)
+gc()
+#set parallel backend
+library(parallel)
+library(parallelMap) 
+parallelStartSocket(cpus = detectCores())
+
+# parameter tuning
+mytune <- tuneParams(learner = lrn, task = traintask, resampling = rdesc,
+                     par.set = params, control = ctrl, show.info = T)
+
+mytune$y
+```
+
+```{r}
+#set hyperparameters
+lrn_tune <- setHyperPars(lrn,par.vals = mytune$x)
+
+#train model
+xgmodel <- train(learner = lrn_tune,task = traintask)
+imp <- mlr::getFeatureImportance(xgmodel)
+
+#view(imp$res)
+
+xgpred <- predict(xgmodel,testtask, type = "prob")
+```
+
+```{r}
+confusionMatrix(xgpred$data$response, xgpred$data$truth)
+```
+
+```{r}
+fulltask <- makeClassifTask (data = vars,target = "CSW", positive = "1")
+
+xgmodel <- train(learner = lrn_tune,task = fulltask)
+
+# saveRDS(xgmodel, file = "c_stuff_RHPvsLHB.rds")
+```
+
+```{r}
+xgpred <- predict(xgmodel, fulltask, type = "prob")
+confusionMatrix(xgpred$data$response, xgpred$data$truth)
+```
+
+
+```{r}
+detach(package:plyr)
+ncaa1$Stuff <- xgpred$data$prob.1
+ncaa1 <- ncaa1 %>% group_by(TaggedPitchType) %>%
+  mutate(ZStuff = (Stuff - mean(Stuff))/sd(Stuff)) %>%
+  mutate(StuffPlus = ZStuff*34.1 + 100) %>% ungroup()
+
+ncaa1$PlayResult <- ifelse(ncaa1$KorBB == "Walk", "Walk", ncaa1$PlayResult)
+ncaa1$PlayResult <- ifelse((ncaa1$KorBB == "Walk") & (ncaa1$PitchCall == "BallIntentional"), "IntentionalWalk", ncaa1$PlayResult)
+ncaa1$PlayResult <- ifelse(ncaa1$KorBB == "Strikeout", "Strikeout", ncaa1$PlayResult)
+ncaa1$PlayResult <- ifelse(ncaa1$PitchCall == "HitByPitch", "HitByPitch", ncaa1$PlayResult)
+
+looking <- ncaa1 %>%# filter(PitcherTeam == "UCLA") %>% 
+  group_by(Pitcher, TaggedPitchType) %>%
+  dplyr::summarize("Stuff+" = mean(StuffPlus),
+                   "Velo" = mean(RelSpeed),
+                   "Spin" = mean(SpinRate),
+                   "IVB" = mean(InducedVertBreak),
+                   "HB" = mean(HorzBreak),
+                   "VAA" = mean(VertApprAngle),
+                   "RelSide" = mean(RelSide),
+                   "RelHeight" = mean(RelHeight),
+                   "Extension" = mean(Extension))
+
+# rm(list = setdiff(ls(), "ncaa1"))
+# validation plot typa deal here (not feeling validated)
+ggplot(ncaa1 %>% filter(TaggedPitchType == "ChangeUp"), aes(HorzBreak, InducedVertBreak, z=StuffPlus)) + stat_summary_hex(fun = function(x) mean(x))
+```
+
+```{r}
+ncaa11 <- ncaa1 %>% group_by(Pitcher) %>% summarize(pitches=n(),
+                                                    "PA" = sum(PlayResult != "Undefined"),
+                                                    "Metric+" = mean(StuffPlus),
+                                                    "wOBA Against" = round(((.693*sum(PlayResult == "Walk") + 
+                                                                  .693*sum(PlayResult == "HitByPitch") + 
+                                                                  .884*sum(PlayResult == "Single") + 
+                                                                  1.261*sum(PlayResult == "Double") +
+                                                                  1.601*sum(PlayResult == "Triple") + 
+                                                                  2.072*sum(PlayResult == "HomeRun"))/(PA-sum(PlayResult == "IntentionalWalk"))),3)) %>%
+  ungroup() %>%
+  filter(pitches > 100)
+
+ggplot(ncaa11) +
+  geom_point(aes(x = `Metric+`, y = `wOBA Against`))
+
+# R^2 .13 kinda dookie
+mod <- lm(`wOBA Against`~`Metric+`, data = ncaa11)
+summary(mod)
+```
+
+
