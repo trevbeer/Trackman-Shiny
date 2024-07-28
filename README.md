@@ -1,12 +1,19 @@
 # Trackman-Shiny
 Collection of code to create in-depth analytical reports based on Trackman CSV files for collegiate baseball.
 
-Usage: Key files are preprocessing.Rmd, your total Trackman CSV, and trackmanreport.R.
+How to use:
+
+1) Take original Trackman data in csv format, and run it through preprocessing.Rmd
+     - This will
+2) Load the csv output by preprocessing.Rmd into
+
+3) .
+
+4) 
 
 In www folder, put a PNG/JPG image for your particular team/organization.
 
-First run preprocessing.Rmd, in order to get cleaned CSV for the Shiny app.
 
 Run trackmanreport.R with the cleaned CSV.
 
-Code for initial iterates is credit to: https://github.com/sambornstein/Simple-Sabermetrics/tree/main
+Code inspiration is credit to: https://github.com/sambornstein/Simple-Sabermetrics/tree/main - we expanded upon the formatting and ideas present in this code base to develop our unique Shiny app.
