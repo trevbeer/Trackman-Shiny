@@ -13,15 +13,6 @@ library(gridExtra)
 library(readr)
 library(lubridate)
 knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
-#knitr::opts_chunk$set(echo=F, 
-#                      eval=T,
-#                      cache=F,
-#                      results='markup', 
-#                      message=F,
-#                      warning=F, 
-#                      fig.height=3,
-#                      fig.width=4,
-#                      fig.align='center')
 ```
 
 ```{r, include = FALSE}
@@ -31,7 +22,7 @@ total <- read.csv(file = "allGames.csv")
 total <- total %>% subset(TaggedPitchType != "Other")
 total <- total %>% subset(TaggedPitchType != "Knuckleball")
 # just ucla guys, not really necessary line
-total <- total %>% subset(PitcherTeam == "UCLA")
+# total <- total %>% subset(PitcherTeam == "UCLA")
 # remove first names and commas
 # total$Pitcher <- str_glue(strsplit(total$Pitcher, ', ')[[1]][2], strsplit(total$Pitcher, ', ')[[1]][1], .sep = ' ')
 total$Pitcher <- sub("(\\w+),\\s(\\w+)","\\2 \\1", total$Pitcher)
@@ -92,9 +83,7 @@ total$Barrel <- rep(NA, nrow(total))
 for (i in 1:nrow(total)) {
   total$Barrel[i] <- as.numeric(is_barrel(total$ExitSpeed[i], total$Angle[i]))
 }
-```
 
-```{r, include = FALSE}
 scrimData <- total %>% group_by("Pitcher") %>% group_by("TaggedPitchType")
 # Overall
 # Function to convert a time in HH:MM:SS format to a numeric value representing the number of seconds
@@ -148,11 +137,9 @@ tiltRound <- strptime(tiltSummary$AveTilt, "%H:%M")
 tiltRound <- lubridate::round_date(tiltRound, "15 minutes")
 # remove seconds/ unecessary stuff and add to tiltSummary
 tiltSummary$AveTilt <- as.character(format(tiltRound,"%H:%M"))
-```
 
-```{r}
 cleaned <- merge(total, tiltSummary, by = c("Pitcher", "TaggedPitchType"), all = TRUE)
-write.csv(cleaned, "C:\\Users\\tbeer\\Documents\\UCLA\\Baseball Analytics\\Shiny\\Shiny Testing\\cleanedGames.csv", row.names = FALSE)
+write.csv(cleaned, "C:\\PATH\\cleanedGames.csv", row.names = FALSE)
 ```
 
 
