@@ -11,6 +11,11 @@ How to use:
 
 In www folder, put a PNG/JPG image for your particular team/organization.
 
+
+## Notes on additional paths/files
+
+- spraychart.R contains our template from which we learned to incorporate visually appealing spray charts into our shiny application.
+
 Code inspiration is credit to: https://github.com/sambornstein/Simple-Sabermetrics/tree/main - we expanded upon the formatting and ideas present in this code base to develop our unique Shiny app.
 
 If bugs or errors are identified, please contact Trevor Beer (tbeerwheels@gmail.com). Thank you.
